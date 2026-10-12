@@ -31,3 +31,8 @@ class StudentResponse(BaseModel):
     course: str
 
     model_config = ConfigDict(from_attributes=True)
+class StudentListResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    students: list[StudentResponse]    

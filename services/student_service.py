@@ -27,8 +27,19 @@ def create_student(db: Session, data: dict):
         )
 
 
-def get_all_students(db: Session):
-    return repo.get_all_students(db)
+
+def get_all_students(
+    db: Session,
+    skip: int = 0,
+    limit: int = 10,
+    search: str | None = None
+):
+    return repo.get_all_students(
+        db,
+        skip=skip,
+        limit=limit,
+        search=search
+    )
 
 
 def get_student_by_id(db: Session, student_id: int):

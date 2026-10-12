@@ -6,6 +6,13 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas import StudentCreate,  StudentUpdate, StudentResponse
 from services import student_service
+from fastapi import Query
+from schemas import (
+    StudentCreate,
+    StudentUpdate,
+    StudentResponse,
+    StudentListResponse
+)
 
 router = APIRouter(
     prefix="/students",
@@ -27,9 +34,21 @@ def create_student(
     )
 
 
-@router.get("", response_model=list[StudentResponse])
-def get_students(db: Session = Depends(get_db)):
-    return student_service.get_all_students(db)
+
+@router.get("", response_model=StudentListResponse)
+def get_students(
+    skip: int = Query(default=0, ge=0),
+limit: int = Query(default=10, ge=1, le=100),
+search: str | None = None,
+    db: Session = Depends(get_db)
+):
+    return student_service.get_all_students(
+        db,
+        skip=skip,
+        limit=limit,
+        search=search
+    )
+
 
 
 @router.get("/{student_id}", response_model=StudentResponse)
