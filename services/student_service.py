@@ -1,82 +1,111 @@
 
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from repositories import student_repository as repo
+
+from models import Course
+from repositories import student_repository
 
 
-def create_student(db: Session, data: dict):
-    # Friendly check before inserting
-    existing = repo.get_student_by_email(db, data["email"])
+def create_student(db: Session, student_data: dict):
+    course_id = student_data.get("course_id")
 
-    if existing:
+    if db.get(Course, course_id) is None:
         raise HTTPException(
-            status_code=409,
-            detail="Email is already registered"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+
+    existing_student = student_repository.get_student_by_email(
+        db, student_data["email"]
+    )
+
+    if existing_student:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered"
         )
 
     try:
-        return repo.create_student(db, data)
+        return student_repository.create_student(db, student_data)
     except IntegrityError:
-        # Undo the failed transaction
         db.rollback()
         raise HTTPException(
-            status_code=409,
-            detail="Email is already registered"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Student could not be created because of a data conflict"
         )
 
 
-
-def get_all_students(
-    db: Session,
-    skip: int = 0,
-    limit: int = 10,
-    search: str | None = None
-):
-    return repo.get_all_students(
-        db,
-        skip=skip,
-        limit=limit,
-        search=search
-    )
-
-
-def get_student_by_id(db: Session, student_id: int):
-    student = repo.get_student_by_id(db, student_id)
+def get_student(db: Session, student_id: int):
+    student = student_repository.get_student_by_id(db, student_id)
 
     if student is None:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Student not found"
         )
 
     return student
 
 
-def update_student(db: Session, student_id: int, data: dict):
-    student = get_student_by_id(db, student_id)
+def get_all_students(db: Session, skip=0, limit=10, search=None):
+    return student_repository.get_all_students(
+        db, skip=skip, limit=limit, search=search
+    )
 
-    existing = repo.get_student_by_email(db, data["email"])
 
-    if existing is not None and existing.id != student_id:
+def update_student(db: Session, student_id: int, update_data: dict):
+    student = student_repository.get_student_by_id(db, student_id)
+
+    if student is None:
         raise HTTPException(
-            status_code=409,
-            detail="Email is already registered"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found"
         )
 
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields provided for update"
+        )
+
+    if "course_id" in update_data:
+        if db.get(Course, update_data["course_id"]) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
+
+    if "email" in update_data:
+        existing_student = student_repository.get_student_by_email(
+            db, update_data["email"]
+        )
+        if existing_student and existing_student.id != student_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered"
+            )
+
     try:
-        return repo.update_student(db, student, data)
+        return student_repository.update_student(
+            db, student, update_data
+        )
     except IntegrityError:
         db.rollback()
         raise HTTPException(
-            status_code=409,
-            detail="Email is already registered"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Student could not be updated because of a data conflict"
         )
 
 
 def delete_student(db: Session, student_id: int):
-    student = get_student_by_id(db, student_id)
-    repo.delete_student(db, student)
+    student = student_repository.get_student_by_id(db, student_id)
 
-    return {"message": "Student deleted successfully"}
+    if student is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found"
+        )
+
+    student_repository.delete_student(db, student)
